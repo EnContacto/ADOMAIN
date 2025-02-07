@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: ztencontacto/my-project
+  IMAGE_NAME: ztencontacto/test-communication
   DOCKER_COMPOSE_FILE: docker-compose.yml
 
 jobs:
@@ -18,32 +18,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Docker and Docker Compose (Official Repo)
+      - name: Install Docker and Docker Compose
         run: |
-          # Remove old Docker versions if they exist
           sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
-          
-          # Install dependencies
           sudo apt-get update
           sudo apt-get install -y ca-certificates curl gnupg
-
-          # Add Docker's official GPG key
           sudo install -m 0755 -d /etc/apt/keyrings
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
           sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-          # Add Docker repository
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-          # Install Docker
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-
-          # Install Docker Compose
           sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
-          
-          # Verify installation
           docker --version
           docker-compose --version
 
@@ -57,11 +44,14 @@ jobs:
         run: |
           docker-compose -f $DOCKER_COMPOSE_FILE build
 
-      - name: Tag Docker images
+      - name: List Docker Images (Debugging Step)
+        run: docker images
+
+      - name: Tag Docker images correctly
         run: |
-          docker tag my-project_sendmessage $IMAGE_NAME:sendmessage-latest
-          docker tag my-project_getmessages $IMAGE_NAME:getmessages-latest
-          docker tag my-project_deletemessage $IMAGE_NAME:deletemessage-latest
+          docker tag test-communication_sendmessage $IMAGE_NAME:sendmessage-latest
+          docker tag test-communication_getmessages $IMAGE_NAME:getmessages-latest
+          docker tag test-communication_deletemessage $IMAGE_NAME:deletemessage-latest
 
       - name: Push Docker images
         run: |
@@ -87,34 +77,24 @@ jobs:
           ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} << 'EOF'
           set -e
 
-          # Install Docker if not installed
           if ! command -v docker &> /dev/null; then
-            echo "Installing Docker..."
             sudo apt update
             sudo apt install -y docker.io
             sudo systemctl enable docker
             sudo systemctl start docker
           fi
 
-          # Install Docker Compose (Latest Version) if not installed
           if ! command -v docker-compose &> /dev/null; then
-            echo "Installing Docker Compose..."
             sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
             sudo chmod +x /usr/local/bin/docker-compose
           fi
 
-          # Pull the latest Docker images
-          echo "Pulling the latest Docker images..."
           sudo docker pull ${{ env.IMAGE_NAME }}:sendmessage-latest
           sudo docker pull ${{ env.IMAGE_NAME }}:getmessages-latest
           sudo docker pull ${{ env.IMAGE_NAME }}:deletemessage-latest
 
-          # Stop and remove existing containers
-          echo "Stopping and removing old containers..."
           sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} down
 
-          # Run new containers with updated images
-          echo "Starting new deployment..."
           AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
           AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
           AWS_REGION="us-east-1" \
