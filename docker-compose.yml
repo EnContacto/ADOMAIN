@@ -3,6 +3,7 @@ version: '3.8'
 services:
   sendmessage:
     build: ./sendmessage
+    image: my-dockerhub-repo/my-project:sendmessage-latest
     ports:
       - "3001:3001"
     environment:
@@ -13,6 +14,7 @@ services:
 
   getmessages:
     build: ./getmessages
+    image: my-dockerhub-repo/my-project:getmessages-latest
     ports:
       - "3002:3002"
     environment:
@@ -23,6 +25,7 @@ services:
 
   deletemessage:
     build: ./deletemessage
+    image: my-dockerhub-repo/my-project:deletemessage-latest
     ports:
       - "3003:3003"
     environment:
