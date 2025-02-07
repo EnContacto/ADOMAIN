@@ -66,7 +66,14 @@ jobs:
 
       - name: Copy project files to EC2
         run: |
-          scp -o StrictHostKeyChecking=no -r . ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }}:${{ env.EC2_WORK_DIR }}
+          echo "Copying project files to EC2..."
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "mkdir -p $EC2_WORK_DIR"
+          scp -o StrictHostKeyChecking=no -C -r * ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }}:$EC2_WORK_DIR
+
+      - name: Verify if docker-compose.yml exists in EC2
+        run: |
+          echo "Checking if docker-compose.yml exists on EC2..."
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "ls -l $EC2_WORK_DIR/docker-compose.yml"
 
       - name: SSH into EC2 and Deploy
         run: |
@@ -91,7 +98,7 @@ jobs:
           sudo docker pull ztencontacto/test-communication:getmessages-latest
           sudo docker pull ztencontacto/test-communication:deletemessage-latest
 
-          sudo docker-compose -f docker-compose.yml down
+          sudo docker-compose -f docker-compose.yml down || true
 
           AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
           AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
