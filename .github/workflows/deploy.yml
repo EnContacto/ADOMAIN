@@ -19,6 +19,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose-plugin
+          docker compose version
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -42,8 +48,7 @@ jobs:
 
       - name: Build and tag Docker image
         run: |
-          docker buildx create --use
-          docker-compose -f $DOCKER_COMPOSE_FILE build
+          docker compose -f $DOCKER_COMPOSE_FILE build
           docker tag my-dockerhub-repo/my-project_sendmessage:latest $IMAGE_NAME:$NEXT_VERSION
           docker tag my-dockerhub-repo/my-project_sendmessage:latest $IMAGE_NAME:latest
 
@@ -80,10 +85,10 @@ jobs:
           fi
 
           # Install Docker Compose if not installed
-          if ! command -v docker-compose &> /dev/null; then
+          if ! command -v docker compose &> /dev/null; then
             echo "Installing Docker Compose..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
+            sudo apt-get update
+            sudo apt-get install -y docker-compose-plugin
           fi
 
           # Pull the latest Docker image
@@ -92,7 +97,7 @@ jobs:
 
           # Stop and remove existing containers
           echo "Stopping and removing old containers..."
-          sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} down
+          sudo docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down
 
           # Run new containers with environment variables
           echo "Starting new deployment..."
@@ -100,5 +105,5 @@ jobs:
           AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
           AWS_REGION="us-east-1" \
           DYNAMODB_TABLE="Messages" \
-          sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d --force-recreate
+          sudo docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d --force-recreate
           EOF
