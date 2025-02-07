@@ -47,17 +47,11 @@ jobs:
       - name: List Docker Images (Debugging Step)
         run: docker images
 
-      - name: Tag Docker images correctly
-        run: |
-          docker tag test-communication_sendmessage $IMAGE_NAME:sendmessage-latest
-          docker tag test-communication_getmessages $IMAGE_NAME:getmessages-latest
-          docker tag test-communication_deletemessage $IMAGE_NAME:deletemessage-latest
-
       - name: Push Docker images
         run: |
-          docker push $IMAGE_NAME:sendmessage-latest
-          docker push $IMAGE_NAME:getmessages-latest
-          docker push $IMAGE_NAME:deletemessage-latest
+          docker push my-dockerhub-repo/my-project:sendmessage-latest
+          docker push my-dockerhub-repo/my-project:getmessages-latest
+          docker push my-dockerhub-repo/my-project:deletemessage-latest
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
@@ -89,9 +83,9 @@ jobs:
             sudo chmod +x /usr/local/bin/docker-compose
           fi
 
-          sudo docker pull ${{ env.IMAGE_NAME }}:sendmessage-latest
-          sudo docker pull ${{ env.IMAGE_NAME }}:getmessages-latest
-          sudo docker pull ${{ env.IMAGE_NAME }}:deletemessage-latest
+          sudo docker pull my-dockerhub-repo/my-project:sendmessage-latest
+          sudo docker pull my-dockerhub-repo/my-project:getmessages-latest
+          sudo docker pull my-dockerhub-repo/my-project:deletemessage-latest
 
           sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} down
 
