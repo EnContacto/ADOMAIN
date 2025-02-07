@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: my-dockerhub-repo/my-project
+  IMAGE_NAME: ztencontacto/communicationdomain
   VERSION: 3.3  # Initial version
   DOCKER_COMPOSE_FILE: docker-compose.yml
 
@@ -47,16 +47,29 @@ jobs:
           echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_ENV
           echo "Next version: $NEXT_VERSION"
 
-      - name: Build and tag Docker image
+      - name: Build Docker images with correct tags
         run: |
           docker-compose -f $DOCKER_COMPOSE_FILE build
-          docker tag my-dockerhub-repo/my-project_sendmessage:latest $IMAGE_NAME:$NEXT_VERSION
-          docker tag my-dockerhub-repo/my-project_sendmessage:latest $IMAGE_NAME:latest
+          
+          docker tag test-communication-sendmessage $IMAGE_NAME:sendmessage-$NEXT_VERSION
+          docker tag test-communication-sendmessage $IMAGE_NAME:sendmessage-latest
+          
+          docker tag test-communication-getmessages $IMAGE_NAME:getmessages-$NEXT_VERSION
+          docker tag test-communication-getmessages $IMAGE_NAME:getmessages-latest
+          
+          docker tag test-communication-deletemessage $IMAGE_NAME:deletemessage-$NEXT_VERSION
+          docker tag test-communication-deletemessage $IMAGE_NAME:deletemessage-latest
 
-      - name: Push image to Docker Hub
+      - name: Push images to Docker Hub
         run: |
-          docker push $IMAGE_NAME:$NEXT_VERSION
-          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:sendmessage-$NEXT_VERSION
+          docker push $IMAGE_NAME:sendmessage-latest
+          
+          docker push $IMAGE_NAME:getmessages-$NEXT_VERSION
+          docker push $IMAGE_NAME:getmessages-latest
+          
+          docker push $IMAGE_NAME:deletemessage-$NEXT_VERSION
+          docker push $IMAGE_NAME:deletemessage-latest
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
@@ -93,15 +106,17 @@ jobs:
             sudo chmod +x /usr/local/bin/docker-compose
           fi
 
-          # Pull the latest Docker image
-          echo "Pulling the latest Docker image..."
-          sudo docker pull ${{ env.IMAGE_NAME }}:latest
+          # Pull the latest Docker images
+          echo "Pulling the latest Docker images..."
+          sudo docker pull ${{ env.IMAGE_NAME }}:sendmessage-latest
+          sudo docker pull ${{ env.IMAGE_NAME }}:getmessages-latest
+          sudo docker pull ${{ env.IMAGE_NAME }}:deletemessage-latest
 
           # Stop and remove existing containers
           echo "Stopping and removing old containers..."
           sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} down
 
-          # Run new containers with environment variables
+          # Run new containers with updated images
           echo "Starting new deployment..."
           AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
           AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
