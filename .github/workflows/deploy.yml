@@ -47,12 +47,6 @@ jobs:
       - name: List Docker Images (Debugging Step)
         run: docker images
 
-      - name: Tag Docker images correctly
-        run: |
-          docker tag test-communication_sendmessage ztencontacto/test-communication:sendmessage-latest
-          docker tag test-communication_getmessages ztencontacto/test-communication:getmessages-latest
-          docker tag test-communication_deletemessage ztencontacto/test-communication:deletemessage-latest
-
       - name: Push Docker images
         run: |
           docker push ztencontacto/test-communication:sendmessage-latest
