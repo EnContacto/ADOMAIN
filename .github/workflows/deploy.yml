@@ -57,9 +57,17 @@ jobs:
         run: |
           docker-compose -f $DOCKER_COMPOSE_FILE build
 
+      - name: Tag Docker images
+        run: |
+          docker tag my-project_sendmessage $IMAGE_NAME:sendmessage-latest
+          docker tag my-project_getmessages $IMAGE_NAME:getmessages-latest
+          docker tag my-project_deletemessage $IMAGE_NAME:deletemessage-latest
+
       - name: Push Docker images
         run: |
-          docker-compose -f $DOCKER_COMPOSE_FILE push
+          docker push $IMAGE_NAME:sendmessage-latest
+          docker push $IMAGE_NAME:getmessages-latest
+          docker push $IMAGE_NAME:deletemessage-latest
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
@@ -97,7 +105,9 @@ jobs:
 
           # Pull the latest Docker images
           echo "Pulling the latest Docker images..."
-          sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} pull
+          sudo docker pull ${{ env.IMAGE_NAME }}:sendmessage-latest
+          sudo docker pull ${{ env.IMAGE_NAME }}:getmessages-latest
+          sudo docker pull ${{ env.IMAGE_NAME }}:deletemessage-latest
 
           # Stop and remove existing containers
           echo "Stopping and removing old containers..."
