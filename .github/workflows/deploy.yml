@@ -7,12 +7,11 @@ on:
 
 env:
   IMAGE_NAME: ztencontacto/my-project
-  VERSION: 3.3
   DOCKER_COMPOSE_FILE: docker-compose.yml
 
 jobs:
-  setup:
-    name: Setup Docker and Docker Compose
+  build-and-push:
+    name: Build and Push Docker Images
     runs-on: ubuntu-latest
 
     steps:
@@ -40,40 +39,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 
-          # Install Docker Compose (Latest Version)
-          DOCKER_COMPOSE_VERSION=2.22.0
-          sudo curl -L "https://github.com/docker/compose/releases/download/v$DOCKER_COMPOSE_VERSION/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          # Install Docker Compose
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           
           # Verify installation
           docker --version
           docker-compose --version
-
-  build-images:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Build Docker images with correct tags
-        run: |
-          docker-compose -f $DOCKER_COMPOSE_FILE build
-
-          docker tag ztencontacto/my-project:sendmessage-latest $IMAGE_NAME:sendmessage-latest
-          docker tag ztencontacto/my-project:getmessages-latest $IMAGE_NAME:getmessages-latest
-          docker tag ztencontacto/my-project:deletemessage-latest $IMAGE_NAME:deletemessage-latest
-
-  push-to-dockerhub:
-    name: Push Images to Docker Hub
-    runs-on: ubuntu-latest
-    needs: build-images
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -81,16 +53,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Build Docker images
+        run: |
+          docker-compose -f $DOCKER_COMPOSE_FILE build
+
       - name: Push Docker images
         run: |
-          docker push $IMAGE_NAME:sendmessage-latest
-          docker push $IMAGE_NAME:getmessages-latest
-          docker push $IMAGE_NAME:deletemessage-latest
+          docker-compose -f $DOCKER_COMPOSE_FILE push
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
     runs-on: ubuntu-latest
-    needs: push-to-dockerhub
+    needs: build-and-push
 
     steps:
       - name: Install SSH Key
@@ -117,16 +91,13 @@ jobs:
           # Install Docker Compose (Latest Version) if not installed
           if ! command -v docker-compose &> /dev/null; then
             echo "Installing Docker Compose..."
-            DOCKER_COMPOSE_VERSION=2.22.0
-            sudo curl -L "https://github.com/docker/compose/releases/download/v$DOCKER_COMPOSE_VERSION/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
             sudo chmod +x /usr/local/bin/docker-compose
           fi
 
           # Pull the latest Docker images
           echo "Pulling the latest Docker images..."
-          sudo docker pull ${{ env.IMAGE_NAME }}:sendmessage-latest
-          sudo docker pull ${{ env.IMAGE_NAME }}:getmessages-latest
-          sudo docker pull ${{ env.IMAGE_NAME }}:deletemessage-latest
+          sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} pull
 
           # Stop and remove existing containers
           echo "Stopping and removing old containers..."
