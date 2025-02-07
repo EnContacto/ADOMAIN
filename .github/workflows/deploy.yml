@@ -57,6 +57,9 @@ jobs:
     needs: build-and-push
 
     steps:
+      - name: Checkout repository (Needed for `scp`)
+        uses: actions/checkout@v3
+
       - name: Install SSH Key
         run: |
           mkdir -p ~/.ssh
@@ -64,11 +67,19 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
+      - name: Compress project files
+        run: tar -czf project.tar.gz *
+
       - name: Copy project files to EC2
         run: |
-          echo "Copying project files to EC2..."
+          echo "Creating directory on EC2..."
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "mkdir -p $EC2_WORK_DIR"
-          scp -o StrictHostKeyChecking=no -C -r * ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }}:$EC2_WORK_DIR
+          
+          echo "Transferring files to EC2..."
+          scp -o StrictHostKeyChecking=no project.tar.gz ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }}:$EC2_WORK_DIR
+          
+          echo "Extracting files on EC2..."
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "tar -xzf $EC2_WORK_DIR/project.tar.gz -C $EC2_WORK_DIR"
 
       - name: Verify if docker-compose.yml exists in EC2
         run: |
