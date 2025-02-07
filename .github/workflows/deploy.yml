@@ -6,28 +6,53 @@ on:
       - main
 
 env:
-  IMAGE_NAME: my-dockerhub-repo/my-project
-  VERSION: 3.3  # Initial version
+  IMAGE_NAME: ztencontacto/my-project
+  VERSION: 3.3
   DOCKER_COMPOSE_FILE: docker-compose.yml
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image
+  setup:
+    name: Setup Docker and Docker Compose
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Docker Compose (Latest Version)
+      - name: Install Docker and Docker Compose
         run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
           DOCKER_COMPOSE_VERSION=2.22.0
           sudo curl -L "https://github.com/docker/compose/releases/download/v$DOCKER_COMPOSE_VERSION/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose version
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Build Docker images with correct tags
+        run: |
+          docker-compose -f $DOCKER_COMPOSE_FILE build
+
+          docker tag ztencontacto/my-project:sendmessage-latest $IMAGE_NAME:sendmessage-latest
+          docker tag ztencontacto/my-project:getmessages-latest $IMAGE_NAME:getmessages-latest
+          docker tag ztencontacto/my-project:deletemessage-latest $IMAGE_NAME:deletemessage-latest
+
+  push-to-dockerhub:
+    name: Push Images to Docker Hub
+    runs-on: ubuntu-latest
+    needs: build-images
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -35,41 +60,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Increment version
-        id: version
+      - name: Push Docker images
         run: |
-          if docker pull $IMAGE_NAME:sendmessage-latest; then
-            CURRENT_VERSION=$(docker images --format "{{.Tag}}" $IMAGE_NAME | sort -V | tail -n1)
-            NEXT_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' OFS=.)
-          else
-            NEXT_VERSION=${{ env.VERSION }}
-          fi
-          echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_ENV
-          echo "Next version: $NEXT_VERSION"
-
-      - name: Build and tag Docker images
-        run: |
-          docker-compose -f $DOCKER_COMPOSE_FILE build
-          
-          docker tag my-dockerhub-repo/my-project:sendmessage-latest $IMAGE_NAME:sendmessage-$NEXT_VERSION
-          docker tag my-dockerhub-repo/my-project:getmessages-latest $IMAGE_NAME:getmessages-$NEXT_VERSION
-          docker tag my-dockerhub-repo/my-project:deletemessage-latest $IMAGE_NAME:deletemessage-$NEXT_VERSION
-
-      - name: Push images to Docker Hub
-        run: |
-          docker push $IMAGE_NAME:sendmessage-$NEXT_VERSION
           docker push $IMAGE_NAME:sendmessage-latest
-          
-          docker push $IMAGE_NAME:getmessages-$NEXT_VERSION
           docker push $IMAGE_NAME:getmessages-latest
-          
-          docker push $IMAGE_NAME:deletemessage-$NEXT_VERSION
           docker push $IMAGE_NAME:deletemessage-latest
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: push-to-dockerhub
 
     steps:
       - name: Install SSH Key
