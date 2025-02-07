@@ -44,9 +44,6 @@ jobs:
         run: |
           docker-compose -f $DOCKER_COMPOSE_FILE build
 
-      - name: List Docker Images (Debugging Step)
-        run: docker images
-
       - name: Push Docker images
         run: |
           docker push ztencontacto/test-communication:sendmessage-latest
@@ -72,8 +69,8 @@ jobs:
           set -e
 
           if ! command -v docker &> /dev/null; then
-            sudo apt update
-            sudo apt install -y docker.io
+            sudo dnf update -y
+            sudo dnf install -y docker
             sudo systemctl enable docker
             sudo systemctl start docker
           fi
