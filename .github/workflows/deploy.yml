@@ -30,7 +30,7 @@ jobs:
             new_version=$(echo "$latest_version + 0.1" | bc)
           fi
           echo "New version: $new_version"
-          echo "new_version=$new_version" >> $GITHUB_ENV
+          echo "::set-output name=new_version::$new_version"
 
   # Step 2: Build and Push Docker Image
   build-and-push:
@@ -44,10 +44,10 @@ jobs:
         run: echo "${{ env.DOCKER_HUB_PASS }}" | docker login -u "${{ env.DOCKER_HUB_USER }}" --password-stdin
 
       - name: Build Docker Image
-        run: docker build -t ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ env.new_version }} .
+        run: docker build -t ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.new_version }} .
 
       - name: Push Docker Image
-        run: docker push ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ env.new_version }}
+        run: docker push ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.new_version }}
 
   # Step 3: Deploy to AWS EC2
   deploy-to-ec2:
@@ -69,14 +69,15 @@ jobs:
             sudo apt install -y docker.io
             sudo systemctl start docker
             sudo systemctl enable docker
+            sudo usermod -aG docker $USER
           fi
 
           # Pull the latest image
-          docker pull ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ env.new_version }}
+          docker pull ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.new_version }}
 
           # Stop and remove any existing container
           docker rm -f myproject-container || true
 
           # Run the new container
-          docker run -d --name myproject-container -p 3001:3001 -p 3002:3002 -p 3003:3003 ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ env.new_version }}
+          docker run -d --name myproject-container -p 3001:3001 -p 3002:3002 -p 3003:3003 ${{ env.DOCKER_HUB_USER }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.new_version }}
           EOF
