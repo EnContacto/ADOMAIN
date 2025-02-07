@@ -1,39 +1,39 @@
+version: '3.8'
+
 services:
   sendmessage:
     build: ./sendmessage
     ports:
       - "3001:3001"
-    env_file:
-      - .env
-    depends_on:
-      - dynamodb
+    environment:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "us-east-1"
+      DYNAMODB_TABLE: "Messages"
 
   getmessages:
     build: ./getmessages
     ports:
       - "3002:3002"
-    env_file:
-      - .env
-    depends_on:
-      - dynamodb
+    environment:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "us-east-1"
+      DYNAMODB_TABLE: "Messages"
 
   deletemessage:
     build: ./deletemessage
     ports:
       - "3003:3003"
-    env_file:
-      - .env
-    depends_on:
-      - dynamodb
+    environment:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_REGION: "us-east-1"
+      DYNAMODB_TABLE: "Messages"
 
   dynamodb:
     image: amazon/dynamodb-local
     container_name: dynamodb-local
     ports:
       - "8000:8000"
-    volumes:
-      - dynamodb_data:/home/dynamodblocal/data
     command: "-jar DynamoDBLocal.jar -sharedDb"
-
-volumes:
-  dynamodb_data:
