@@ -49,9 +49,9 @@ jobs:
 
       - name: Push Docker images
         run: |
-          docker push my-dockerhub-repo/my-project:sendmessage-latest
-          docker push my-dockerhub-repo/my-project:getmessages-latest
-          docker push my-dockerhub-repo/my-project:deletemessage-latest
+          docker push ztencontacto/test-communication:sendmessage-latest
+          docker push ztencontacto/test-communication:getmessages-latest
+          docker push ztencontacto/test-communication:deletemessage-latest
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
@@ -83,9 +83,9 @@ jobs:
             sudo chmod +x /usr/local/bin/docker-compose
           fi
 
-          sudo docker pull my-dockerhub-repo/my-project:sendmessage-latest
-          sudo docker pull my-dockerhub-repo/my-project:getmessages-latest
-          sudo docker pull my-dockerhub-repo/my-project:deletemessage-latest
+          sudo docker pull ztencontacto/test-communication:sendmessage-latest
+          sudo docker pull ztencontacto/test-communication:getmessages-latest
+          sudo docker pull ztencontacto/test-communication:deletemessage-latest
 
           sudo docker-compose -f ${{ env.DOCKER_COMPOSE_FILE }} down
 
