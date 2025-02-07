@@ -1,17 +1,12 @@
-name: Deploy to EC2 on main push
+name: Deploy to EC2
 
 on:
   push:
     branches:
       - main
 
-env:
-  IMAGE_NAME: ztencontacto/test-communication
-  DOCKER_COMPOSE_FILE: docker-compose.yml
-  EC2_WORK_DIR: /home/ec2-user/test-communication
-
 jobs:
-  build-and-push:
+  build_and_push:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
 
@@ -19,101 +14,51 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Docker and Docker Compose
-        run: |
-          sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates curl gnupg
-          sudo install -m 0755 -d /etc/apt/keyrings
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
-          sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker --version
-          docker-compose --version
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Build Docker images
+      - name: Build and Push SendMessage Image
         run: |
-          docker-compose -f $DOCKER_COMPOSE_FILE build
-
-      - name: Push Docker images
-        run: |
+          docker build -t ztencontacto/test-communication:sendmessage-latest ./sendmessage
           docker push ztencontacto/test-communication:sendmessage-latest
+
+      - name: Build and Push GetMessages Image
+        run: |
+          docker build -t ztencontacto/test-communication:getmessages-latest ./getmessages
           docker push ztencontacto/test-communication:getmessages-latest
+
+      - name: Build and Push DeleteMessage Image
+        run: |
+          docker build -t ztencontacto/test-communication:deletemessage-latest ./deletemessage
           docker push ztencontacto/test-communication:deletemessage-latest
 
-  deploy-to-ec2:
-    name: Deploy to AWS EC2
+  deploy_ec2:
+    name: Deploy on EC2
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build_and_push
 
     steps:
-      - name: Checkout repository (Needed for `scp`)
-        uses: actions/checkout@v3
-
-      - name: Install SSH Key
+      - name: Connect to EC2 and Deploy Containers
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_INSTANCE_IP }} >> ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+            echo "Stopping existing containers..."
+            sudo docker-compose down
 
-      - name: Compress project files
-        run: tar -czf project.tar.gz *
+            echo "Pulling latest images..."
+            sudo docker pull ztencontacto/test-communication:sendmessage-latest
+            sudo docker pull ztencontacto/test-communication:getmessages-latest
+            sudo docker pull ztencontacto/test-communication:deletemessage-latest
 
-      - name: Copy project files to EC2
-        run: |
-          echo "Creating directory on EC2..."
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "mkdir -p $EC2_WORK_DIR"
-          
-          echo "Transferring files to EC2..."
-          scp -o StrictHostKeyChecking=no project.tar.gz ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }}:$EC2_WORK_DIR
-          
-          echo "Extracting files on EC2..."
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "tar -xzf $EC2_WORK_DIR/project.tar.gz -C $EC2_WORK_DIR"
-
-      - name: Verify if docker-compose.yml exists in EC2
-        run: |
-          echo "Checking if docker-compose.yml exists on EC2..."
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} "ls -l $EC2_WORK_DIR/docker-compose.yml"
-
-      - name: SSH into EC2 and Deploy
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_INSTANCE_IP }} << 'EOF'
-          set -e
-
-          cd ${{ env.EC2_WORK_DIR }}
-
-          if ! command -v docker &> /dev/null; then
-            sudo dnf update -y
-            sudo dnf install -y docker
-            sudo systemctl enable docker
-            sudo systemctl start docker
-          fi
-
-          if ! command -v docker-compose &> /dev/null; then
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-          fi
-
-          sudo docker pull ztencontacto/test-communication:sendmessage-latest
-          sudo docker pull ztencontacto/test-communication:getmessages-latest
-          sudo docker pull ztencontacto/test-communication:deletemessage-latest
-
-          sudo docker-compose -f docker-compose.yml down || true
-
-          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
-          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
-          AWS_REGION="us-east-1" \
-          DYNAMODB_TABLE="Messages" \
-          sudo docker-compose -f docker-compose.yml up -d --force-recreate
+            echo "Restarting services..."
+            sudo docker-compose up -d
           EOF

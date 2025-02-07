@@ -2,7 +2,6 @@ version: '3.8'
 
 services:
   sendmessage:
-    build: ./sendmessage
     image: ztencontacto/test-communication:sendmessage-latest
     ports:
       - "3001:3001"
@@ -13,7 +12,6 @@ services:
       DYNAMODB_TABLE: "Messages"
 
   getmessages:
-    build: ./getmessages
     image: ztencontacto/test-communication:getmessages-latest
     ports:
       - "3002:3002"
@@ -24,7 +22,6 @@ services:
       DYNAMODB_TABLE: "Messages"
 
   deletemessage:
-    build: ./deletemessage
     image: ztencontacto/test-communication:deletemessage-latest
     ports:
       - "3003:3003"
@@ -33,10 +30,3 @@ services:
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
       AWS_REGION: "us-east-1"
       DYNAMODB_TABLE: "Messages"
-
-  dynamodb:
-    image: amazon/dynamodb-local
-    container_name: dynamodb-local
-    ports:
-      - "8000:8000"
-    command: "-jar DynamoDBLocal.jar -sharedDb"
