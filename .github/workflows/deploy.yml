@@ -25,18 +25,18 @@ jobs:
 
       - name: Build and Push SendMessage Image
         run: |
-          docker build -t ztencontacto/test-communication:sendmessage-latest ./sendmessage
-          docker push ztencontacto/test-communication:sendmessage-latest
+          docker build --no-cache -t ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:sendmessage-latest ./sendmessage
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:sendmessage-latest
 
       - name: Build and Push GetMessages Image
         run: |
-          docker build -t ztencontacto/test-communication:getmessages-latest ./getmessages
-          docker push ztencontacto/test-communication:getmessages-latest
+          docker build --no-cache -t ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:getmessages-latest ./getmessages
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:getmessages-latest
 
       - name: Build and Push DeleteMessage Image
         run: |
-          docker build -t ztencontacto/test-communication:deletemessage-latest ./deletemessage
-          docker push ztencontacto/test-communication:deletemessage-latest
+          docker build --no-cache -t ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:deletemessage-latest ./deletemessage
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:deletemessage-latest
 
   deploy_ec2:
     name: Deploy on EC2
@@ -51,44 +51,60 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
 
-      - name: Verify SSH Connection
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} "echo 'SSH Connection Successful'"
-
-      - name: Clone Repository on EC2 (if not exists)
+      - name: Deploy Docker Containers on EC2
         run: |
           ssh -i ~/.ssh/id_rsa ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-            if [ ! -d ~/test-communication ]; then
-              echo "Cloning repository..."
-              git clone https://github.com/tu-usuario/tu-repositorio.git ~/test-communication
-            else
-              echo "Directory ~/test-communication already exists. Skipping clone."
+            echo "Stopping and removing existing containers if running..."
+            RUNNING_CONTAINERS=$(sudo docker ps -q)
+            if [ ! -z "$RUNNING_CONTAINERS" ]; then
+              sudo docker stop $RUNNING_CONTAINERS
+              sudo docker rm $RUNNING_CONTAINERS
             fi
-          EOF
 
-      - name: Deploy to EC2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: "us-east-1"
-        run: |
-          ssh -i ~/.ssh/id_rsa ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-            echo "Changing to project directory..."
-            cd ~/test-communication || { echo "Directory ~/test-communication not found. Exiting."; exit 1; }
+            echo "Pulling latest Docker images..."
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:sendmessage-latest
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:getmessages-latest
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:deletemessage-latest
 
-            echo "Stopping existing containers..."
-            sudo docker-compose down
+            echo "Setting persistent environment variables..."
+            echo "export AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}'" | sudo tee -a /etc/environment
+            echo "export AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}'" | sudo tee -a /etc/environment
+            echo "export AWS_REGION='us-east-1'" | sudo tee -a /etc/environment
+            echo "export DYNAMODB_TABLE='MessagesTable'" | sudo tee -a /etc/environment
+            echo "export S3_BUCKET='your-s3-bucket-name'" | sudo tee -a /etc/environment
 
-            echo "Pulling latest images..."
-            sudo docker pull ztencontacto/test-communication:sendmessage-latest
-            sudo docker pull ztencontacto/test-communication:getmessages-latest
-            sudo docker pull ztencontacto/test-communication:deletemessage-latest
+            source /etc/environment
 
-            echo "Setting environment variables..."
-            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-            export AWS_REGION="us-east-1"
+            echo "Verifying stored environment variables..."
+            env | grep AWS_
 
-            echo "Restarting services..."
-            sudo docker-compose up -d
+            echo "Running containers with the latest images..."
+            sudo docker run -d -p 3001:3000 --name sendmessage \
+              --restart always \
+              -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+              -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+              -e AWS_REGION="$AWS_REGION" \
+              -e DYNAMODB_TABLE="$DYNAMODB_TABLE" \
+              -e S3_BUCKET="$S3_BUCKET" \
+              ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:sendmessage-latest
+
+            sudo docker run -d -p 3002:3000 --name getmessages \
+              --restart always \
+              -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+              -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+              -e AWS_REGION="$AWS_REGION" \
+              -e DYNAMODB_TABLE="$DYNAMODB_TABLE" \
+              -e S3_BUCKET="$S3_BUCKET" \
+              ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:getmessages-latest
+
+            sudo docker run -d -p 3003:3000 --name deletemessage \
+              --restart always \
+              -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+              -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+              -e AWS_REGION="$AWS_REGION" \
+              -e DYNAMODB_TABLE="$DYNAMODB_TABLE" \
+              -e S3_BUCKET="$S3_BUCKET" \
+              ${{ secrets.DOCKERHUB_USERNAME }}/test-communication:deletemessage-latest
+
+            echo "Deployment complete!"
           EOF
