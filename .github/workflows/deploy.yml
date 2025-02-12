@@ -51,6 +51,18 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
 
+      - name: Install Docker on EC2
+        run: |
+          ssh -i ~/.ssh/id_rsa ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+            echo "Installing Docker..."
+            sudo yum update -y
+            sudo yum install docker -y
+            sudo service docker start
+            sudo systemctl enable docker
+            sudo usermod -a -G docker ec2-user
+            echo "Docker installed successfully!"
+          EOF
+
       - name: Deploy Docker Containers on EC2
         run: |
           ssh -i ~/.ssh/id_rsa ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
